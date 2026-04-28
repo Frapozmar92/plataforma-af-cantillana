@@ -44,6 +44,11 @@ const authPanelEl = document.getElementById("auth-panel");
 const authFormEl = document.getElementById("auth-form");
 const authEmailInput = document.getElementById("auth-email");
 const authPasswordInput = document.getElementById("auth-password");
+const passwordPanelEl = document.getElementById("password-panel");
+const passwordFormEl = document.getElementById("password-form");
+const newPasswordInput = document.getElementById("new-password");
+const confirmPasswordInput = document.getElementById("confirm-password");
+const passwordFeedbackEl = document.getElementById("password-feedback");
 const authStatusEl = document.getElementById("auth-status");
 const adminFeedbackEl = document.getElementById("admin-feedback");
 const adminAccessBtn = document.getElementById("admin-access-btn");
@@ -247,14 +252,20 @@ function startEdit(id) {
 
 function setAuthUI(session, extraText = "") {
   const isLogged = Boolean(session?.user);
+  const mustChangePassword = Boolean(session?.user?.user_metadata?.must_change_password);
   state.sessionUser = session?.user ?? null;
   state.accessToken = session?.access_token ?? null;
-  adminPanelEl.hidden = !isLogged;
+  adminPanelEl.hidden = !isLogged || mustChangePassword;
   adminLogoutBtn.hidden = !isLogged;
-  authPanelEl.hidden = isLogged;
+  authPanelEl.hidden = isLogged || mustChangePassword;
+  passwordPanelEl.hidden = !isLogged || !mustChangePassword;
   authStatusEl.textContent = isLogged
     ? `Sesion iniciada: ${session.user.email}${extraText ? ` - ${extraText}` : ""}`
     : extraText || "Sin autenticar";
+
+  if (mustChangePassword) {
+    adminFeedbackEl.textContent = "Debes cambiar tu contrasena para habilitar la administracion.";
+  }
 }
 
 async function fetchModulesFromCloud() {
@@ -459,6 +470,38 @@ authFormEl.addEventListener("submit", async (event) => {
   setAuthUI(data.session);
   authFormEl.reset();
   adminFeedbackEl.textContent = "Sesion iniciada. Ya puedes guardar modulos.";
+});
+
+passwordFormEl.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (!supabase || !state.sessionUser) return;
+
+  const pass1 = newPasswordInput.value;
+  const pass2 = confirmPasswordInput.value;
+  if (pass1.length < 10) {
+    passwordFeedbackEl.textContent = "La nueva contrasena debe tener al menos 10 caracteres.";
+    return;
+  }
+  if (pass1 !== pass2) {
+    passwordFeedbackEl.textContent = "Las contrasenas no coinciden.";
+    return;
+  }
+
+  const { error } = await supabase.auth.updateUser({
+    password: pass1,
+    data: { must_change_password: false }
+  });
+
+  if (error) {
+    passwordFeedbackEl.textContent = `No se pudo actualizar: ${error.message}`;
+    return;
+  }
+
+  passwordFormEl.reset();
+  passwordFeedbackEl.textContent = "";
+  const { data: { session } } = await supabase.auth.getSession();
+  setAuthUI(session, "Contrasena actualizada");
+  adminFeedbackEl.textContent = "Contrasena actualizada. Administracion habilitada.";
 });
 
 cancelEditBtn.addEventListener("click", clearForm);

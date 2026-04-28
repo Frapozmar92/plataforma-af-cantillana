@@ -53,6 +53,27 @@
       </form>
     </section>
 
+    <section id="password-panel" class="auth-panel" hidden>
+      <div class="admin-head">
+        <h2>Cambio obligatorio de contrasena</h2>
+        <p>Por seguridad, debes establecer una contrasena nueva para continuar.</p>
+      </div>
+      <form id="password-form" class="module-form">
+        <div class="form-row">
+          <label for="new-password">Nueva contrasena</label>
+          <input id="new-password" type="password" required placeholder="Minimo 10 caracteres">
+        </div>
+        <div class="form-row">
+          <label for="confirm-password">Confirmar contrasena</label>
+          <input id="confirm-password" type="password" required placeholder="Repite la contrasena">
+        </div>
+        <div class="form-actions">
+          <button type="submit">Actualizar contrasena</button>
+        </div>
+        <p id="password-feedback" class="admin-feedback" aria-live="polite"></p>
+      </form>
+    </section>
+
     <section class="admin-panel" hidden>
       <div class="admin-head">
         <h2>Administracion de Modulos</h2>
