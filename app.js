@@ -56,6 +56,18 @@ function isValidModule(item) {
     && typeof item.url === "string";
 }
 
+function normalizeUrl(rawValue) {
+  const trimmed = rawValue.trim();
+  if (!trimmed) return null;
+  const candidate = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  try {
+    const parsed = new URL(candidate);
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
 function isValidModuleArray(config) {
   return Array.isArray(config) && config.every(isValidModule);
 }
@@ -331,10 +343,14 @@ formEl.addEventListener("submit", async (event) => {
 
   const name = nameInput.value.trim();
   const note = noteInput.value.trim();
-  const url = urlInput.value.trim();
-  if (!name || !note || !url) return;
+  const normalizedUrl = normalizeUrl(urlInput.value);
+  if (!name || !note || !normalizedUrl) {
+    adminFeedbackEl.textContent = "Completa todos los campos y revisa la URL.";
+    return;
+  }
 
-  await upsertModule({ name, note, url });
+  urlInput.value = normalizedUrl;
+  await upsertModule({ name, note, url: normalizedUrl });
 });
 
 authFormEl.addEventListener("submit", async (event) => {
