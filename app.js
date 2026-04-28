@@ -24,7 +24,8 @@ const state = {
   modules: [],
   editingId: null,
   isReady: false,
-  sessionUser: null
+  sessionUser: null,
+  accessToken: null
 };
 
 const gridEl = document.getElementById("modules-grid");
@@ -197,6 +198,7 @@ function startEdit(id) {
 function setAuthUI(session, extraText = "") {
   const isLogged = Boolean(session?.user);
   state.sessionUser = session?.user ?? null;
+  state.accessToken = session?.access_token ?? null;
   adminPanelEl.hidden = !isLogged;
   adminLogoutBtn.hidden = !isLogged;
   authPanelEl.hidden = isLogged;
@@ -218,11 +220,44 @@ async function fetchModulesFromCloud() {
   renderAdminList();
 }
 
+async function writeModulesREST(method, query = "", body = null) {
+  if (!state.accessToken) {
+    return { ok: false, error: "No hay token de sesion activo." };
+  }
+
+  const endpoint = `${SUPABASE_URL}/rest/v1/modules${query}`;
+  const headers = {
+    apikey: SUPABASE_ANON_KEY,
+    Authorization: `Bearer ${state.accessToken}`,
+    "Content-Type": "application/json",
+    Prefer: "return=representation"
+  };
+
+  const response = await fetch(endpoint, {
+    method,
+    headers,
+    body: body ? JSON.stringify(body) : undefined
+  });
+
+  if (!response.ok) {
+    const raw = await response.text();
+    return { ok: false, error: raw || `HTTP ${response.status}` };
+  }
+
+  let payload = null;
+  try {
+    payload = await response.json();
+  } catch {
+    payload = null;
+  }
+  return { ok: true, data: payload };
+}
+
 async function removeModule(id) {
   if (!supabase) return;
-  const { error } = await supabase.from("modules").delete().eq("id", id);
-  if (error) {
-    adminFeedbackEl.textContent = `No se pudo borrar: ${error.message}`;
+  const result = await writeModulesREST("DELETE", `?id=eq.${id}`);
+  if (!result.ok) {
+    adminFeedbackEl.textContent = `No se pudo borrar: ${result.error}`;
     return;
   }
   adminFeedbackEl.textContent = "Modulo borrado correctamente.";
@@ -233,19 +268,16 @@ async function upsertModule(moduleData) {
   if (!supabase) return;
   let successMessage = "";
   if (state.editingId) {
-    const { error } = await supabase
-      .from("modules")
-      .update(moduleData)
-      .eq("id", state.editingId);
-    if (error) {
-      adminFeedbackEl.textContent = `No se pudo actualizar: ${error.message}`;
+    const result = await writeModulesREST("PATCH", `?id=eq.${state.editingId}`, moduleData);
+    if (!result.ok) {
+      adminFeedbackEl.textContent = `No se pudo actualizar: ${result.error}`;
       return;
     }
     successMessage = "Modulo actualizado correctamente.";
   } else {
-    const { error } = await supabase.from("modules").insert(moduleData);
-    if (error) {
-      adminFeedbackEl.textContent = `No se pudo guardar: ${error.message}`;
+    const result = await writeModulesREST("POST", "", [moduleData]);
+    if (!result.ok) {
+      adminFeedbackEl.textContent = `No se pudo guardar: ${result.error}`;
       return;
     }
     successMessage = "Modulo guardado correctamente.";
@@ -367,14 +399,13 @@ authFormEl.addEventListener("submit", async (event) => {
   const password = authPasswordInput.value;
   if (!email || !password) return;
 
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) {
     adminFeedbackEl.textContent = `Login incorrecto: ${error.message}`;
     return;
   }
+  setAuthUI(data.session);
   authFormEl.reset();
-  const { data: { session } } = await supabase.auth.getSession();
-  setAuthUI(session);
   adminFeedbackEl.textContent = "Sesion iniciada. Ya puedes guardar modulos.";
 });
 
