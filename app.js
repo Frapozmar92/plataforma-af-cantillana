@@ -1,8 +1,8 @@
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
 
 // Rellena estos valores con tu proyecto Supabase.
-const SUPABASE_URL = "https://TU-PROYECTO.supabase.co";
-const SUPABASE_ANON_KEY = "TU_SUPABASE_ANON_KEY";
+const SUPABASE_URL = "https://hvvpilxnkpeqpaugnxrh.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh2dnBpbHhua3BlcXBhdWdueHJoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzczNjc0MTQsImV4cCI6MjA5Mjk0MzQxNH0.bcjgQDf-kBTDFt13BMas7DsTE7JUjviVaZhQavsTh3o";
 
 const STORAGE_KEY = "didactic_modules_config_backup_v1";
 const LEGACY_STORAGE_KEY = "didactic_modules_config_v1";
