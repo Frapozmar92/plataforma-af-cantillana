@@ -202,19 +202,6 @@ async function fetchModulesFromCloud() {
   renderAdminList();
 }
 
-async function seedCloudIfEmpty() {
-  const { count, error: countError } = await supabase
-    .from("modules")
-    .select("*", { count: "exact", head: true });
-  if (countError) throw countError;
-  if (count && count > 0) return;
-
-  const backup = loadLocalBackup();
-  const rows = backup.map((m) => ({ name: m.name, note: m.note, url: m.url }));
-  const { error: insertError } = await supabase.from("modules").insert(rows);
-  if (insertError) throw insertError;
-}
-
 async function removeModule(id) {
   if (!supabase) return;
   const { error } = await supabase.from("modules").delete().eq("id", id);
@@ -309,7 +296,6 @@ async function bootstrapSupabase() {
   }
 
   try {
-    await seedCloudIfEmpty();
     await fetchModulesFromCloud();
     const { data: { session } } = await supabase.auth.getSession();
     setAuthUI(session);
