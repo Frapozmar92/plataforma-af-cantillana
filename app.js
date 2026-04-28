@@ -23,7 +23,8 @@ const defaultModules = [
 const state = {
   modules: [],
   editingId: null,
-  isReady: false
+  isReady: false,
+  sessionUser: null
 };
 
 const gridEl = document.getElementById("modules-grid");
@@ -195,6 +196,7 @@ function startEdit(id) {
 
 function setAuthUI(session, extraText = "") {
   const isLogged = Boolean(session?.user);
+  state.sessionUser = session?.user ?? null;
   adminPanelEl.hidden = !isLogged;
   adminLogoutBtn.hidden = !isLogged;
   authPanelEl.hidden = isLogged;
@@ -229,6 +231,7 @@ async function removeModule(id) {
 
 async function upsertModule(moduleData) {
   if (!supabase) return;
+  let successMessage = "";
   if (state.editingId) {
     const { error } = await supabase
       .from("modules")
@@ -238,18 +241,19 @@ async function upsertModule(moduleData) {
       adminFeedbackEl.textContent = `No se pudo actualizar: ${error.message}`;
       return;
     }
-    adminFeedbackEl.textContent = "Modulo actualizado correctamente.";
+    successMessage = "Modulo actualizado correctamente.";
   } else {
     const { error } = await supabase.from("modules").insert(moduleData);
     if (error) {
       adminFeedbackEl.textContent = `No se pudo guardar: ${error.message}`;
       return;
     }
-    adminFeedbackEl.textContent = "Modulo guardado correctamente.";
+    successMessage = "Modulo guardado correctamente.";
   }
 
   clearForm();
   await fetchModulesFromCloud();
+  adminFeedbackEl.textContent = successMessage;
 }
 
 function exportConfig() {
@@ -334,9 +338,11 @@ async function bootstrapSupabase() {
 
 formEl.addEventListener("submit", async (event) => {
   event.preventDefault();
-  if (!state.isReady || !supabase) return;
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session?.user) {
+  if (!state.isReady || !supabase) {
+    adminFeedbackEl.textContent = "La app aun no ha terminado de conectar con Supabase.";
+    return;
+  }
+  if (!state.sessionUser) {
     adminFeedbackEl.textContent = "Debes iniciar sesion como profesor para guardar.";
     return;
   }
@@ -367,6 +373,8 @@ authFormEl.addEventListener("submit", async (event) => {
     return;
   }
   authFormEl.reset();
+  const { data: { session } } = await supabase.auth.getSession();
+  setAuthUI(session);
   adminFeedbackEl.textContent = "Sesion iniciada. Ya puedes guardar modulos.";
 });
 
