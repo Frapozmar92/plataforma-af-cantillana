@@ -34,6 +34,7 @@ const formEl = document.getElementById("module-form");
 const nameInput = document.getElementById("form-name");
 const noteInput = document.getElementById("form-note");
 const urlInput = document.getElementById("form-url");
+const courseInput = document.getElementById("form-course");
 const saveBtn = document.getElementById("save-btn");
 const cancelEditBtn = document.getElementById("cancel-edit-btn");
 const exportBtn = document.getElementById("export-btn");
@@ -68,6 +69,21 @@ function normalizeUrl(rawValue) {
   } catch {
     return null;
   }
+}
+
+function courseToTag(course) {
+  return course === "SEGUNDO CURSO" ? "[[COURSE:2]] " : "[[COURSE:1]] ";
+}
+
+function parseCourseAndNote(note) {
+  if (typeof note !== "string") return { course: "PRIMER CURSO", noteText: "" };
+  if (note.startsWith("[[COURSE:2]] ")) {
+    return { course: "SEGUNDO CURSO", noteText: note.replace("[[COURSE:2]] ", "") };
+  }
+  if (note.startsWith("[[COURSE:1]] ")) {
+    return { course: "PRIMER CURSO", noteText: note.replace("[[COURSE:1]] ", "") };
+  }
+  return { course: "PRIMER CURSO", noteText: note };
 }
 
 function isValidModuleArray(config) {
@@ -109,28 +125,58 @@ function persistLocalBackup() {
 
 function renderModules() {
   gridEl.innerHTML = "";
+  const groups = { "PRIMER CURSO": [], "SEGUNDO CURSO": [] };
 
   state.modules.forEach((module) => {
-    const card = document.createElement("article");
-    card.className = "module-card";
+    const { course, noteText } = parseCourseAndNote(module.note);
+    groups[course].push({ ...module, displayNote: noteText });
+  });
 
-    const moduleName = document.createElement("h3");
-    moduleName.className = "module-name";
-    moduleName.textContent = module.name;
+  ["PRIMER CURSO", "SEGUNDO CURSO"].forEach((courseName) => {
+    const wrapper = document.createElement("section");
+    wrapper.className = "course-group";
 
-    const moduleNote = document.createElement("p");
-    moduleNote.className = "module-note";
-    moduleNote.textContent = module.note;
+    const title = document.createElement("h3");
+    title.className = "course-title";
+    title.textContent = courseName;
+    wrapper.appendChild(title);
 
-    const link = document.createElement("a");
-    link.className = "module-link";
-    link.href = module.url;
-    link.target = "_blank";
-    link.rel = "noopener noreferrer";
-    link.textContent = "Entrar al modulo";
+    const courseGrid = document.createElement("div");
+    courseGrid.className = "modules-grid";
 
-    card.append(moduleName, moduleNote, link);
-    gridEl.appendChild(card);
+    groups[courseName].forEach((module) => {
+      const card = document.createElement("article");
+      card.className = "module-card";
+
+      const moduleName = document.createElement("h3");
+      moduleName.className = "module-name";
+      moduleName.textContent = module.name;
+
+      const moduleNote = document.createElement("p");
+      moduleNote.className = "module-note";
+      moduleNote.textContent = module.displayNote;
+
+      const link = document.createElement("a");
+      link.className = "module-link";
+      link.href = module.url;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.textContent = "Entrar al modulo";
+
+      card.append(moduleName, moduleNote, link);
+      courseGrid.appendChild(card);
+    });
+
+    if (!groups[courseName].length) {
+      const empty = document.createElement("p");
+      empty.className = "module-note";
+      empty.textContent = "Sin modulos en este curso por ahora.";
+      wrapper.appendChild(empty);
+    } else {
+      wrapper.appendChild(courseGrid);
+    }
+
+    gridEl.appendChild(wrapper);
   });
 }
 
@@ -145,7 +191,8 @@ function renderAdminList() {
     head.className = "admin-item-head";
 
     const title = document.createElement("strong");
-    title.textContent = module.name;
+    const parsed = parseCourseAndNote(module.note);
+    title.textContent = `${parsed.course} - ${module.name}`;
 
     const url = document.createElement("a");
     url.href = module.url;
@@ -154,7 +201,7 @@ function renderAdminList() {
     url.textContent = "Abrir";
 
     const text = document.createElement("p");
-    text.textContent = module.note;
+    text.textContent = parsed.noteText;
 
     const actions = document.createElement("div");
     actions.className = "admin-item-actions";
@@ -180,6 +227,7 @@ function renderAdminList() {
 
 function clearForm() {
   formEl.reset();
+  courseInput.value = "PRIMER CURSO";
   state.editingId = null;
   saveBtn.textContent = "Guardar modulo";
   adminFeedbackEl.textContent = "";
@@ -188,9 +236,11 @@ function clearForm() {
 function startEdit(id) {
   const target = state.modules.find((m) => m.id === id);
   if (!target) return;
+  const parsed = parseCourseAndNote(target.note);
   state.editingId = id;
   nameInput.value = target.name;
-  noteInput.value = target.note;
+  noteInput.value = parsed.noteText;
+  courseInput.value = parsed.course;
   urlInput.value = target.url;
   saveBtn.textContent = "Actualizar modulo";
 }
@@ -381,6 +431,7 @@ formEl.addEventListener("submit", async (event) => {
 
   const name = nameInput.value.trim();
   const note = noteInput.value.trim();
+  const course = courseInput.value;
   const normalizedUrl = normalizeUrl(urlInput.value);
   if (!name || !note || !normalizedUrl) {
     adminFeedbackEl.textContent = "Completa todos los campos y revisa la URL.";
@@ -388,7 +439,8 @@ formEl.addEventListener("submit", async (event) => {
   }
 
   urlInput.value = normalizedUrl;
-  await upsertModule({ name, note, url: normalizedUrl });
+  const encodedNote = `${courseToTag(course)}${note}`;
+  await upsertModule({ name, note: encodedNote, url: normalizedUrl });
 });
 
 authFormEl.addEventListener("submit", async (event) => {
