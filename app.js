@@ -1,7 +1,11 @@
-const STORAGE_KEY = "didactic_modules_config_v2";
+import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
+
+// Rellena estos valores con tu proyecto Supabase.
+const SUPABASE_URL = "https://TU-PROYECTO.supabase.co";
+const SUPABASE_ANON_KEY = "TU_SUPABASE_ANON_KEY";
+
+const STORAGE_KEY = "didactic_modules_config_backup_v1";
 const LEGACY_STORAGE_KEY = "didactic_modules_config_v1";
-const ADMIN_SESSION_KEY = "didactic_admin_enabled_v1";
-const TEACHER_PASSWORD = "cambiar-esta-clave";
 
 const defaultModules = [
   {
@@ -17,8 +21,9 @@ const defaultModules = [
 ];
 
 const state = {
-  modules: loadModules(),
-  editingIndex: null
+  modules: [],
+  editingId: null,
+  isReady: false
 };
 
 const gridEl = document.getElementById("modules-grid");
@@ -32,12 +37,16 @@ const cancelEditBtn = document.getElementById("cancel-edit-btn");
 const exportBtn = document.getElementById("export-btn");
 const importInput = document.getElementById("import-input");
 const adminPanelEl = document.querySelector(".admin-panel");
+const authPanelEl = document.getElementById("auth-panel");
+const authFormEl = document.getElementById("auth-form");
+const authEmailInput = document.getElementById("auth-email");
+const authPasswordInput = document.getElementById("auth-password");
+const authStatusEl = document.getElementById("auth-status");
 const adminAccessBtn = document.getElementById("admin-access-btn");
 const adminLogoutBtn = document.getElementById("admin-logout-btn");
 
-function cloneDefaults() {
-  return JSON.parse(JSON.stringify(defaultModules));
-}
+const hasSupabaseConfig = !SUPABASE_URL.includes("TU-PROYECTO") && !SUPABASE_ANON_KEY.includes("TU_SUPABASE");
+const supabase = hasSupabaseConfig ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 
 function isValidModule(item) {
   return item
@@ -58,7 +67,7 @@ function migrateLegacyConfig(config) {
   return merged;
 }
 
-function loadModules() {
+function loadLocalBackup() {
   const raw = localStorage.getItem(STORAGE_KEY);
   if (raw) {
     try {
@@ -72,33 +81,15 @@ function loadModules() {
     try {
       const legacyParsed = JSON.parse(legacyRaw);
       const migrated = migrateLegacyConfig(legacyParsed);
-      if (migrated) {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
-        return migrated;
-      }
+      if (migrated) return migrated;
     } catch {}
   }
 
-  return cloneDefaults();
+  return JSON.parse(JSON.stringify(defaultModules));
 }
 
-function persistModules() {
+function persistLocalBackup() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state.modules));
-}
-
-function isAdminEnabled() {
-  return sessionStorage.getItem(ADMIN_SESSION_KEY) === "1";
-}
-
-function setAdminEnabled(enabled) {
-  if (enabled) sessionStorage.setItem(ADMIN_SESSION_KEY, "1");
-  else sessionStorage.removeItem(ADMIN_SESSION_KEY);
-}
-
-function refreshAdminVisibility() {
-  const enabled = isAdminEnabled();
-  adminPanelEl.hidden = !enabled;
-  adminLogoutBtn.hidden = !enabled;
 }
 
 function renderModules() {
@@ -131,7 +122,7 @@ function renderModules() {
 function renderAdminList() {
   adminListEl.innerHTML = "";
 
-  state.modules.forEach((module, index) => {
+  state.modules.forEach((module) => {
     const item = document.createElement("article");
     item.className = "admin-item";
 
@@ -157,13 +148,13 @@ function renderAdminList() {
     editBtn.type = "button";
     editBtn.className = "secondary";
     editBtn.textContent = "Editar";
-    editBtn.addEventListener("click", () => startEdit(index));
+    editBtn.addEventListener("click", () => startEdit(module.id));
 
     const deleteBtn = document.createElement("button");
     deleteBtn.type = "button";
     deleteBtn.className = "secondary";
     deleteBtn.textContent = "Borrar";
-    deleteBtn.addEventListener("click", () => removeModule(index));
+    deleteBtn.addEventListener("click", () => removeModule(module.id));
 
     actions.append(editBtn, deleteBtn);
     head.append(title, url);
@@ -174,41 +165,92 @@ function renderAdminList() {
 
 function clearForm() {
   formEl.reset();
-  state.editingIndex = null;
+  state.editingId = null;
   saveBtn.textContent = "Guardar modulo";
 }
 
-function startEdit(index) {
-  const target = state.modules[index];
-  state.editingIndex = index;
+function startEdit(id) {
+  const target = state.modules.find((m) => m.id === id);
+  if (!target) return;
+  state.editingId = id;
   nameInput.value = target.name;
   noteInput.value = target.note;
   urlInput.value = target.url;
   saveBtn.textContent = "Actualizar modulo";
 }
 
-function removeModule(index) {
-  state.modules.splice(index, 1);
-  persistModules();
+function setAuthUI(session, extraText = "") {
+  const isLogged = Boolean(session?.user);
+  adminPanelEl.hidden = !isLogged;
+  adminLogoutBtn.hidden = !isLogged;
+  authPanelEl.hidden = isLogged;
+  authStatusEl.textContent = isLogged
+    ? `Sesion iniciada: ${session.user.email}${extraText ? ` - ${extraText}` : ""}`
+    : extraText || "Sin autenticar";
+}
+
+async function fetchModulesFromCloud() {
+  const { data, error } = await supabase
+    .from("modules")
+    .select("id,name,note,url,created_at")
+    .order("created_at", { ascending: true });
+
+  if (error) throw error;
+  state.modules = data ?? [];
+  persistLocalBackup();
   renderModules();
   renderAdminList();
 }
 
-function upsertModule(moduleData) {
-  if (state.editingIndex !== null) {
-    state.modules[state.editingIndex] = moduleData;
+async function seedCloudIfEmpty() {
+  const { count, error: countError } = await supabase
+    .from("modules")
+    .select("*", { count: "exact", head: true });
+  if (countError) throw countError;
+  if (count && count > 0) return;
+
+  const backup = loadLocalBackup();
+  const rows = backup.map((m) => ({ name: m.name, note: m.note, url: m.url }));
+  const { error: insertError } = await supabase.from("modules").insert(rows);
+  if (insertError) throw insertError;
+}
+
+async function removeModule(id) {
+  if (!supabase) return;
+  const { error } = await supabase.from("modules").delete().eq("id", id);
+  if (error) {
+    alert(`No se pudo borrar: ${error.message}`);
+    return;
+  }
+  await fetchModulesFromCloud();
+}
+
+async function upsertModule(moduleData) {
+  if (!supabase) return;
+  if (state.editingId) {
+    const { error } = await supabase
+      .from("modules")
+      .update(moduleData)
+      .eq("id", state.editingId);
+    if (error) {
+      alert(`No se pudo actualizar: ${error.message}`);
+      return;
+    }
   } else {
-    state.modules.push(moduleData);
+    const { error } = await supabase.from("modules").insert(moduleData);
+    if (error) {
+      alert(`No se pudo guardar: ${error.message}`);
+      return;
+    }
   }
 
-  persistModules();
-  renderModules();
-  renderAdminList();
   clearForm();
+  await fetchModulesFromCloud();
 }
 
 function exportConfig() {
-  const blob = new Blob([JSON.stringify(state.modules, null, 2)], { type: "application/json" });
+  const exportable = state.modules.map((m) => ({ name: m.name, note: m.note, url: m.url }));
+  const blob = new Blob([JSON.stringify(exportable, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
@@ -219,24 +261,36 @@ function exportConfig() {
 
 function importConfig(file) {
   const reader = new FileReader();
-  reader.onload = () => {
+  reader.onload = async () => {
     try {
       const parsed = JSON.parse(String(reader.result));
+      let modules = null;
 
       if (isValidModuleArray(parsed)) {
-        state.modules = parsed;
+        modules = parsed;
       } else {
-        const migrated = migrateLegacyConfig(parsed);
-        if (!migrated) {
-          alert("El archivo JSON no tiene el formato correcto.");
-          return;
-        }
-        state.modules = migrated;
+        modules = migrateLegacyConfig(parsed);
       }
 
-      persistModules();
-      renderModules();
-      renderAdminList();
+      if (!modules) {
+        alert("El archivo JSON no tiene el formato correcto.");
+        return;
+      }
+
+      const { error: deleteError } = await supabase.from("modules").delete().neq("id", 0);
+      if (deleteError) {
+        alert(`No se pudo limpiar la tabla: ${deleteError.message}`);
+        return;
+      }
+
+      const rows = modules.map((m) => ({ name: m.name, note: m.note, url: m.url }));
+      const { error: insertError } = await supabase.from("modules").insert(rows);
+      if (insertError) {
+        alert(`No se pudo importar: ${insertError.message}`);
+        return;
+      }
+
+      await fetchModulesFromCloud();
       clearForm();
     } catch {
       alert("No se pudo leer el archivo JSON.");
@@ -245,40 +299,91 @@ function importConfig(file) {
   reader.readAsText(file);
 }
 
-formEl.addEventListener("submit", (event) => {
+async function bootstrapSupabase() {
+  if (!supabase) {
+    state.modules = loadLocalBackup();
+    renderModules();
+    renderAdminList();
+    setAuthUI(null, "Configura SUPABASE_URL y SUPABASE_ANON_KEY en app.js");
+    return;
+  }
+
+  try {
+    await seedCloudIfEmpty();
+    await fetchModulesFromCloud();
+    const { data: { session } } = await supabase.auth.getSession();
+    setAuthUI(session);
+
+    supabase.auth.onAuthStateChange(async (_event, session) => {
+      setAuthUI(session);
+      if (session) await fetchModulesFromCloud();
+    });
+  } catch (error) {
+    state.modules = loadLocalBackup();
+    renderModules();
+    renderAdminList();
+    setAuthUI(null, `Error nube: ${error.message}`);
+  } finally {
+    state.isReady = true;
+  }
+}
+
+formEl.addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (!state.isReady || !supabase) return;
+
   const name = nameInput.value.trim();
   const note = noteInput.value.trim();
   const url = urlInput.value.trim();
-
   if (!name || !note || !url) return;
-  upsertModule({ name, note, url });
+
+  await upsertModule({ name, note, url });
+});
+
+authFormEl.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (!supabase) return;
+
+  const email = authEmailInput.value.trim();
+  const password = authPasswordInput.value;
+  if (!email || !password) return;
+
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) {
+    alert(`Login incorrecto: ${error.message}`);
+    return;
+  }
+  authFormEl.reset();
 });
 
 cancelEditBtn.addEventListener("click", clearForm);
 exportBtn.addEventListener("click", exportConfig);
 importInput.addEventListener("change", (event) => {
   const file = event.target.files?.[0];
-  if (file) importConfig(file);
+  if (file && supabase) importConfig(file);
   importInput.value = "";
 });
 
-adminAccessBtn.addEventListener("click", () => {
-  const value = window.prompt("Introduce la clave de profesor:");
-  if (value === null) return;
-  if (value !== TEACHER_PASSWORD) {
-    alert("Clave incorrecta.");
+adminAccessBtn.addEventListener("click", async () => {
+  if (!supabase) {
+    setAuthUI(null, "Configura Supabase para activar login docente");
+    authPanelEl.hidden = false;
     return;
   }
-  setAdminEnabled(true);
-  refreshAdminVisibility();
+
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session) {
+    setAuthUI(session);
+    return;
+  }
+  authPanelEl.hidden = false;
+  authStatusEl.textContent = "Introduce tus credenciales";
 });
 
-adminLogoutBtn.addEventListener("click", () => {
-  setAdminEnabled(false);
-  refreshAdminVisibility();
+adminLogoutBtn.addEventListener("click", async () => {
+  if (!supabase) return;
+  await supabase.auth.signOut();
+  clearForm();
 });
 
-renderModules();
-renderAdminList();
-refreshAdminVisibility();
+bootstrapSupabase();

@@ -28,14 +28,35 @@
     </section>
 
     <section class="admin-access">
-      <button id="admin-access-btn" type="button">Acceso administracion profesor</button>
-      <button id="admin-logout-btn" type="button" class="secondary" hidden>Cerrar administracion</button>
+      <button id="admin-access-btn" type="button">Acceso profesorado</button>
+      <button id="admin-logout-btn" type="button" class="secondary" hidden>Cerrar sesion</button>
+      <p id="auth-status" class="auth-status">Sin autenticar</p>
+    </section>
+
+    <section id="auth-panel" class="auth-panel" hidden>
+      <div class="admin-head">
+        <h2>Login Profesorado</h2>
+        <p>Acceso con email y contrasena para editar modulos.</p>
+      </div>
+      <form id="auth-form" class="module-form">
+        <div class="form-row">
+          <label for="auth-email">Email</label>
+          <input id="auth-email" type="email" required placeholder="profesor@centro.es">
+        </div>
+        <div class="form-row">
+          <label for="auth-password">Contrasena</label>
+          <input id="auth-password" type="password" required placeholder="********">
+        </div>
+        <div class="form-actions">
+          <button type="submit" id="auth-login-btn">Iniciar sesion</button>
+        </div>
+      </form>
     </section>
 
     <section class="admin-panel" hidden>
       <div class="admin-head">
         <h2>Administracion de Modulos</h2>
-        <p>Gestiona modulos sin tocar codigo. Los cambios se guardan en este navegador.</p>
+        <p>Gestiona modulos sin tocar codigo. Los cambios se guardan en la nube para todo el equipo.</p>
       </div>
 
       <form id="module-form" class="module-form">
@@ -70,6 +91,6 @@
     </section>
   </main>
 
-  <script src="./app.js"></script>
+  <script type="module" src="./app.js"></script>
 </body>
 </html>
