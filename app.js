@@ -42,6 +42,7 @@ const authFormEl = document.getElementById("auth-form");
 const authEmailInput = document.getElementById("auth-email");
 const authPasswordInput = document.getElementById("auth-password");
 const authStatusEl = document.getElementById("auth-status");
+const adminFeedbackEl = document.getElementById("admin-feedback");
 const adminAccessBtn = document.getElementById("admin-access-btn");
 const adminLogoutBtn = document.getElementById("admin-logout-btn");
 
@@ -167,6 +168,7 @@ function clearForm() {
   formEl.reset();
   state.editingId = null;
   saveBtn.textContent = "Guardar modulo";
+  adminFeedbackEl.textContent = "";
 }
 
 function startEdit(id) {
@@ -206,9 +208,10 @@ async function removeModule(id) {
   if (!supabase) return;
   const { error } = await supabase.from("modules").delete().eq("id", id);
   if (error) {
-    alert(`No se pudo borrar: ${error.message}`);
+    adminFeedbackEl.textContent = `No se pudo borrar: ${error.message}`;
     return;
   }
+  adminFeedbackEl.textContent = "Modulo borrado correctamente.";
   await fetchModulesFromCloud();
 }
 
@@ -220,15 +223,17 @@ async function upsertModule(moduleData) {
       .update(moduleData)
       .eq("id", state.editingId);
     if (error) {
-      alert(`No se pudo actualizar: ${error.message}`);
+      adminFeedbackEl.textContent = `No se pudo actualizar: ${error.message}`;
       return;
     }
+    adminFeedbackEl.textContent = "Modulo actualizado correctamente.";
   } else {
     const { error } = await supabase.from("modules").insert(moduleData);
     if (error) {
-      alert(`No se pudo guardar: ${error.message}`);
+      adminFeedbackEl.textContent = `No se pudo guardar: ${error.message}`;
       return;
     }
+    adminFeedbackEl.textContent = "Modulo guardado correctamente.";
   }
 
   clearForm();
@@ -260,27 +265,28 @@ function importConfig(file) {
       }
 
       if (!modules) {
-        alert("El archivo JSON no tiene el formato correcto.");
+        adminFeedbackEl.textContent = "El archivo JSON no tiene el formato correcto.";
         return;
       }
 
       const { error: deleteError } = await supabase.from("modules").delete().neq("id", 0);
       if (deleteError) {
-        alert(`No se pudo limpiar la tabla: ${deleteError.message}`);
+        adminFeedbackEl.textContent = `No se pudo limpiar la tabla: ${deleteError.message}`;
         return;
       }
 
       const rows = modules.map((m) => ({ name: m.name, note: m.note, url: m.url }));
       const { error: insertError } = await supabase.from("modules").insert(rows);
       if (insertError) {
-        alert(`No se pudo importar: ${insertError.message}`);
+        adminFeedbackEl.textContent = `No se pudo importar: ${insertError.message}`;
         return;
       }
 
       await fetchModulesFromCloud();
       clearForm();
+      adminFeedbackEl.textContent = "Importacion completada.";
     } catch {
-      alert("No se pudo leer el archivo JSON.");
+      adminFeedbackEl.textContent = "No se pudo leer el archivo JSON.";
     }
   };
   reader.readAsText(file);
@@ -317,6 +323,11 @@ async function bootstrapSupabase() {
 formEl.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!state.isReady || !supabase) return;
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.user) {
+    adminFeedbackEl.textContent = "Debes iniciar sesion como profesor para guardar.";
+    return;
+  }
 
   const name = nameInput.value.trim();
   const note = noteInput.value.trim();
@@ -336,10 +347,11 @@ authFormEl.addEventListener("submit", async (event) => {
 
   const { error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) {
-    alert(`Login incorrecto: ${error.message}`);
+    adminFeedbackEl.textContent = `Login incorrecto: ${error.message}`;
     return;
   }
   authFormEl.reset();
+  adminFeedbackEl.textContent = "Sesion iniciada. Ya puedes guardar modulos.";
 });
 
 cancelEditBtn.addEventListener("click", clearForm);

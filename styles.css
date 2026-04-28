@@ -269,6 +269,12 @@ button[type="submit"] {
   gap: 8px;
 }
 
+.admin-feedback {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
 .admin-tools {
   margin-top: 12px;
 }
