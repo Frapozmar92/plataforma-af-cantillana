@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Plataforma Didactica</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main class="app">
+    <header class="hero">
+      <p class="eyebrow">Ciclo Formativo de Grado Superior</p>
+      <h1>ADMINISTRACION Y FINANZAS</h1>
+      <p class="subtitle">
+        I.E.S Cantillana
+      </p>
+    </header>
+
+    <section class="modules-section">
+      <div class="section-head">
+        <h2 id="modules-title">Modulos Formativos</h2>
+        <p>Accede al recurso del modulo que corresponda a la sesion de hoy.</p>
+      </div>
+      <div id="modules-grid" class="modules-grid" aria-live="polite"></div>
+    </section>
+
+    <section class="admin-access">
+      <button id="admin-access-btn" type="button">Acceso administracion profesor</button>
+      <button id="admin-logout-btn" type="button" class="secondary" hidden>Cerrar administracion</button>
+    </section>
+
+    <section class="admin-panel" hidden>
+      <div class="admin-head">
+        <h2>Administracion de Modulos</h2>
+        <p>Gestiona modulos sin tocar codigo. Los cambios se guardan en este navegador.</p>
+      </div>
+
+      <form id="module-form" class="module-form">
+        <div class="form-row">
+          <label for="form-name">Nombre del modulo</label>
+          <input id="form-name" type="text" required placeholder="Ej: Modulo 05 - Lenguajes de marcas">
+        </div>
+
+        <div class="form-row">
+          <label for="form-note">Descripcion corta</label>
+          <input id="form-note" type="text" required placeholder="Ej: Actividades interactivas de clase">
+        </div>
+
+        <div class="form-row">
+          <label for="form-url">URL del modulo</label>
+          <input id="form-url" type="url" required placeholder="https://...">
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" id="save-btn">Guardar modulo</button>
+          <button type="button" id="cancel-edit-btn" class="secondary">Cancelar edicion</button>
+        </div>
+      </form>
+
+      <div class="admin-tools">
+        <button id="export-btn" type="button" class="secondary">Exportar configuracion JSON</button>
+        <label class="import-label" for="import-input">Importar configuracion JSON</label>
+        <input id="import-input" type="file" accept="application/json" hidden>
+      </div>
+
+      <div id="admin-list" class="admin-list"></div>
+    </section>
+  </main>
+
+  <script src="./app.js"></script>
+</body>
+</html>
